@@ -1,6 +1,7 @@
 var AWS = require('aws-sdk');
 var url = require('url');
 var https = require('https');
+const zlib = require('zlib');
 var config = require('./config');
 var _ = require('lodash');
 var hookUrl;
@@ -311,6 +312,73 @@ var handleAutoScaling = function(event, context) {
   return _.merge(slackMessage, baseSlackMessage);
 };
 
+var handleLogEvents = function(event, context) {
+  /*
+   * Sample event:
+   *
+   * {
+   *   "messageType": "DATA_MESSAGE",
+   *   "owner": "012345678901",
+   *   "logGroup": "/aws/lambda/me_service",
+   *   "logStream": "2022/09/04/[$LATEST]c717acc62d684152acd3a21472d268bf",
+   *   "subscriptionFilters": [
+   *     "monitoring-xyz"
+   *   ],
+   *   "logEvents": [
+   *     {
+   *       "id": "37069470110751832880583827787212973248783473595208630274",
+   *       "timestamp": 1662252529265,
+   *       "message": ""
+   *     },
+   *     {
+   *       "id": "37069470110774133625782358410354508967056121956714610691",
+   *       "timestamp": 1662252529266,
+   *       "message": ""
+   *     }
+   *   ]
+   * }
+   **/
+
+  // Log events are gzipped, then encoded to base64 (https://stackoverflow.com/a/52197455/2050)
+  const payload = Buffer.from(event.awslogs.data, 'base64');
+  const data = JSON.parse(zlib.unzipSync(payload).toString());
+
+  const subject = "Event from " + data.logGroup;
+  const logevents = data.logEvents;
+  const timestamp = new Date(logevents[logevents.length - 1].timestamp).getTime() / 1000;
+
+  // Add all of the values from the event message to the Slack message description
+  var entries = [];
+  for (const logevent of logevents.sort(function(a, b){return a.timestamp - b.timestamp})) {
+    const msg = JSON.stringify(logevent.message);
+    entries.push(msg);
+  }
+  const description = entries.join("\n")
+
+  var color = "good";
+  if (description.toUpperCase().includes("ERROR")) {
+    color = "danger";
+  } else if (description.toUpperCase().includes("WARN")) {
+    color = "warning";
+  }
+
+  var slackMessage = {
+    text: "*" + subject + "*",
+    attachments: [
+      {
+        "color": color,
+        "fields": [
+          { "title": "Message", "value": subject, "short": false },
+          { "title": "Description", "value": description, "short": false }
+        ],
+        "ts": timestamp
+      }
+    ]
+  }
+
+  return _.merge(slackMessage, baseSlackMessage);
+}
+
 var handleCatchAll = function(event, context) {
 
     var record = event.Records[0]
@@ -356,43 +424,50 @@ var handleCatchAll = function(event, context) {
 var processEvent = function(event, context) {
   console.log("sns received:" + JSON.stringify(event, null, 2));
   var slackMessage = null;
-  var eventSubscriptionArn = event.Records[0].EventSubscriptionArn;
-  var eventSnsSubject = event.Records[0].Sns.Subject || 'no subject';
-  var eventSnsMessageRaw = event.Records[0].Sns.Message;
-  var eventSnsMessage = null;
 
-  try {
-    eventSnsMessage = JSON.parse(eventSnsMessageRaw);
-  }
-  catch (e) {    
-  }
+  if (event.awslogs && event.awslogs.data) {
+    // Processing for log events
+    slackMessage = handleLogEvents(event, context);
+  } else {
+    // Processing for alarm notifications
+    var eventSubscriptionArn = event.Records[0].EventSubscriptionArn;
+    var eventSnsSubject = event.Records[0].Sns.Subject || 'no subject';
+    var eventSnsMessageRaw = event.Records[0].Sns.Message;
+    var eventSnsMessage = null;
 
-  if(eventSubscriptionArn.indexOf(config.services.codepipeline.match_text) > -1 || eventSnsSubject.indexOf(config.services.codepipeline.match_text) > -1 || eventSnsMessageRaw.indexOf(config.services.codepipeline.match_text) > -1){
-    console.log("processing codepipeline notification");
-    slackMessage = handleCodePipeline(event,context)
-  }
-  else if(eventSubscriptionArn.indexOf(config.services.elasticbeanstalk.match_text) > -1 || eventSnsSubject.indexOf(config.services.elasticbeanstalk.match_text) > -1 || eventSnsMessageRaw.indexOf(config.services.elasticbeanstalk.match_text) > -1){
-    console.log("processing elasticbeanstalk notification");
-    slackMessage = handleElasticBeanstalk(event,context)
-  }
-  else if(eventSnsMessage && 'AlarmName' in eventSnsMessage && 'AlarmDescription' in eventSnsMessage){
-    console.log("processing cloudwatch notification");
-    slackMessage = handleCloudWatch(event,context);
-  }
-  else if(eventSubscriptionArn.indexOf(config.services.codedeploy.match_text) > -1 || eventSnsSubject.indexOf(config.services.codedeploy.match_text) > -1 || eventSnsMessageRaw.indexOf(config.services.codedeploy.match_text) > -1){
-    console.log("processing codedeploy notification");
-    slackMessage = handleCodeDeploy(event,context);
-  }
-  else if(eventSubscriptionArn.indexOf(config.services.elasticache.match_text) > -1 || eventSnsSubject.indexOf(config.services.elasticache.match_text) > -1 || eventSnsMessageRaw.indexOf(config.services.elasticache.match_text) > -1){
-    console.log("processing elasticache notification");
-    slackMessage = handleElasticache(event,context);
-  }
-  else if(eventSubscriptionArn.indexOf(config.services.autoscaling.match_text) > -1 || eventSnsSubject.indexOf(config.services.autoscaling.match_text) > -1 || eventSnsMessageRaw.indexOf(config.services.autoscaling.match_text) > -1){
-    console.log("processing autoscaling notification");
-    slackMessage = handleAutoScaling(event, context);
-  }
-  else{
-    slackMessage = handleCatchAll(event, context);
+    try {
+      eventSnsMessage = JSON.parse(eventSnsMessageRaw);
+    }
+    catch (e) {
+    }
+
+    if(eventSubscriptionArn.indexOf(config.services.codepipeline.match_text) > -1 || eventSnsSubject.indexOf(config.services.codepipeline.match_text) > -1 || eventSnsMessageRaw.indexOf(config.services.codepipeline.match_text) > -1){
+      console.log("processing codepipeline notification");
+      slackMessage = handleCodePipeline(event,context)
+    }
+    else if(eventSubscriptionArn.indexOf(config.services.elasticbeanstalk.match_text) > -1 || eventSnsSubject.indexOf(config.services.elasticbeanstalk.match_text) > -1 || eventSnsMessageRaw.indexOf(config.services.elasticbeanstalk.match_text) > -1){
+      console.log("processing elasticbeanstalk notification");
+      slackMessage = handleElasticBeanstalk(event,context)
+    }
+    else if(eventSnsMessage && 'AlarmName' in eventSnsMessage && 'AlarmDescription' in eventSnsMessage){
+      console.log("processing cloudwatch notification");
+      slackMessage = handleCloudWatch(event,context);
+    }
+    else if(eventSubscriptionArn.indexOf(config.services.codedeploy.match_text) > -1 || eventSnsSubject.indexOf(config.services.codedeploy.match_text) > -1 || eventSnsMessageRaw.indexOf(config.services.codedeploy.match_text) > -1){
+      console.log("processing codedeploy notification");
+      slackMessage = handleCodeDeploy(event,context);
+    }
+    else if(eventSubscriptionArn.indexOf(config.services.elasticache.match_text) > -1 || eventSnsSubject.indexOf(config.services.elasticache.match_text) > -1 || eventSnsMessageRaw.indexOf(config.services.elasticache.match_text) > -1){
+      console.log("processing elasticache notification");
+      slackMessage = handleElasticache(event,context);
+    }
+    else if(eventSubscriptionArn.indexOf(config.services.autoscaling.match_text) > -1 || eventSnsSubject.indexOf(config.services.autoscaling.match_text) > -1 || eventSnsMessageRaw.indexOf(config.services.autoscaling.match_text) > -1){
+      console.log("processing autoscaling notification");
+      slackMessage = handleAutoScaling(event, context);
+    }
+    else{
+      slackMessage = handleCatchAll(event, context);
+    }
   }
 
   postMessage(slackMessage, function(response) {
