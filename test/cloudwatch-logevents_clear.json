@@ -1,0 +1,21 @@
+{
+   "messageType": "DATA_MESSAGE",
+   "owner": "012345678901",
+   "logGroup": "/aws/lambda/me_service",
+   "logStream": "2022/09/04/[$LATEST]c717acc62d684152acd3a21472d268bf",
+   "subscriptionFilters": [
+     "monitoring-xyz"
+   ],
+   "logEvents": [
+     {
+       "id": "37069470110751832880583827787212973248783473595208630274",
+       "timestamp": 1662252529265,
+       "message": "[ERROR]\t2022-09-08T03:39:09.676Z\t150bb7ae-6d8d-484b-b21b-1e015fc6709d\t{\"type\": \"test\", \"settings\": [{\"name\": \"main\", \"hook\": \"./bin/run\"}]}"
+     },
+     {
+       "id": "37069470110774133625782358410354508967056121956714610691",
+       "timestamp": 1662252529266,
+       "message": "[ERROR]\t2022-09-08T03:39:09.677Z\t150bb7ae-6d8d-484b-b21b-1e015fc6709d\tTraceback (most recent call last):\n\tFile \"/var/task/app.py\", line 129, in handler\nException: Invalid config: Missing this and that"
+     }
+   ]
+}

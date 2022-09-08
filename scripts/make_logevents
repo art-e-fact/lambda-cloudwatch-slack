@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+
+CLEAR_FILE=$1
+TARGET_FILE=$2
+
+if [[ $@ < 2 ]]
+then
+	echo "Usage: make_logevents <source file> <result file>"
+	exit 1
+fi
+
+if [[ -f "$TARGET_FILE" ]]
+then
+	echo $TARGET_FILE already exists, aborting. Please remove the file first if you really want to proceed.
+	exit 2
+fi
+
+RESULT=$(gzip --to-stdout $CLEAR_FILE | base64)
+
+echo -e "{\n  \"awslogs\": {\n    \"data\": \"$RESULT\"\n  }\n}" > $TARGET_FILE
