@@ -347,33 +347,25 @@ var handleLogEvents = function(event, context) {
   const logevents = data.logEvents;
   const timestamp = new Date(logevents[logevents.length - 1].timestamp).getTime() / 1000;
 
-  // Add all of the values from the event message to the Slack message description
-  var entries = [];
+  var entries = [
+      {
+        "type": "header",
+        "text": {
+          "type": "plain_text",
+          "text": subject,
+        },
+      },
+  ];
   for (const logevent of logevents.sort(function(a, b){return a.timestamp - b.timestamp})) {
-    const msg = JSON.stringify(logevent.message);
-    entries.push(msg);
-  }
-  const description = entries.join("\n")
-
-  var color = "good";
-  if (description.toUpperCase().includes("ERROR")) {
-    color = "danger";
-  } else if (description.toUpperCase().includes("WARN")) {
-    color = "warning";
+    entries.push({
+      "type": "section",
+      "text": { "type": "mrkdwn", "text": logevent.message },
+    });
   }
 
   var slackMessage = {
     text: "*" + subject + "*",
-    attachments: [
-      {
-        "color": color,
-        "fields": [
-          { "title": "Message", "value": subject, "short": false },
-          { "title": "Description", "value": description, "short": false }
-        ],
-        "ts": timestamp
-      }
-    ]
+    blocks: entries,
   }
 
   return _.merge(slackMessage, baseSlackMessage);
