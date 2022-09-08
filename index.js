@@ -467,7 +467,7 @@ var processEvent = function(event, context) {
       console.info('message posted successfully');
       context.succeed();
     } else if (response.statusCode < 500) {
-      console.error("error posting message to slack API: " + response.statusCode + " - " + response.statusMessage);
+      console.error("error posting message to slack API: " + response.statusCode + " - " + response.statusMessage + ": " + response.body);
       // Don't retry because the error is due to a problem with the request
       context.succeed();
     } else {
