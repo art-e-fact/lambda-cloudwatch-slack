@@ -1,5 +1,5 @@
 *~
-.env
+.env*
 tmp/deploy.env
 npm-debug.log
 

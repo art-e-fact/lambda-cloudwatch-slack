@@ -1,5 +1,15 @@
 # lambda-cloudwatch-slack
 
+## TLDR
+
+Run and let you guided by `AWS_PROFILE=myprofile ./bin/deploy myenv`
+
+Where `myprofile` can be omitted if you rely on `default`, and `myenv` is your target environment.
+
+The "guide" will ask to follow the more detailed guidance below on how to specify targets for AWS and Slack.
+
+## LR
+
 An [AWS Lambda](http://aws.amazon.com/lambda/) function for better Slack notifications. 
 [Check out the blog post](https://assertible.com/blog/npm-package-lambda-cloudwatch-slack).
 

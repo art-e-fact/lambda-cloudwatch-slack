@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+
+set -e
+
+if [[ $@ < 1 ]]
+then
+  echo "Usage: deploy <env>"
+  exit 1
+fi
+
+target=".env.$1"
+
+if [[ -f $target ]]
+then
+  cp $target .env
+  npm run deploy
+else
+  echo "Please provide an environment file for $1 (by copying and populating .env.example to $target)"
+  exit 2
+fi
